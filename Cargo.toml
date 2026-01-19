@@ -1,0 +1,25 @@
+[package]
+name = "SilliReminder"
+version = "0.1.0"
+authors = ["Jakub Konieczny"]
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+eframe = "0.33.3"
+image = { version = "0.25.6", default-features = false, features = ["png"] }
+raw-window-handle = "0.6"
+rusqlite = "0.38.0"
+serde = "1.0.228"
+serde_derive = "1.0.228"
+winreg = "0.55.0"
+windows = { version = "0.61.2", features = [
+	"Win32_Foundation",
+	"Win32_System_LibraryLoader",
+	"Win32_UI_Shell",
+	"Win32_UI_WindowsAndMessaging",
+	"Win32_Graphics_Gdi",
+] }
+
+[build-dependencies]
+winres = "0.1.12"
