@@ -3,12 +3,12 @@
 #define MyAppExeName "SilliReminder.exe"
 
 ; Fill this with the direct download URL to your GitHub Release asset (.exe)
-#define MyAppUrl "<FILL_ME_GITHUB_DOWNLOAD_URL_TO_EXE>"
+#define MyAppUrl "https://github.com/Fanoks/SilliReminder/releases/download/v1.0.0/SilliReminder.exe"
 
 ; Fill this with the expected SHA-256 of the downloaded EXE (64 hex chars)
 ; Example: "0123AB..." (no spaces). You can compute it with PowerShell:
 ;   (Get-FileHash .\SilliReminder.exe -Algorithm SHA256).Hash
-#define MyAppSha256 "<FILL_ME_SHA256_OF_EXE>"
+#define MyAppSha256 "41d016cd199a849d82ecc79fee395d0af328b808a667549f04ffa121a04ce426"
 
 ; This installer uses the Inno Download Plugin (IDP) to download the EXE.
 ; Install IDP, then compile this script with Inno Setup.
