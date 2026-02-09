@@ -7,12 +7,12 @@ license = "MIT"
 
 [dependencies]
 eframe = "0.33.3"
-chrono = "0.4"
-raw-window-handle = "0.6"
+chrono = "0.4.43"
+raw-window-handle = "0.6.2"
 rusqlite = { version = "0.38.0", features = ["bundled"] }
 serde = "1.0.228"
 serde_derive = "1.0.228"
-sys-locale = "0.3"
+sys-locale = "0.3.2"
 winreg = "0.55.0"
 windows = { version = "0.62.2", features = [
 	"Win32_Foundation",

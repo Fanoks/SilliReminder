@@ -1,0 +1,31 @@
+﻿name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  windows:
+    name: Windows (fmt + check)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo check
+        run: cargo check --all-targets
+
+      - name: cargo test (compile)
+        run: cargo test --all-targets
