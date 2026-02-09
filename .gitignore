@@ -1,1 +1,18 @@
-/target
+/target/
+**/*.rs.bk
+
+# IDE
+.vscode/
+
+# App runtime data (local)
+*.db
+*.sqlite
+*.sqlite3
+
+# Installer outputs
+*.exe
+installer/innosetup/Output/
+
+# OS
+Thumbs.db
+.DS_Store
