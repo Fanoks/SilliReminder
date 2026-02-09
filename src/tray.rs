@@ -49,3 +49,23 @@ pub fn spawn_tray(sender: Sender<TrayCommand>) {
         let _ = sender;
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum TrayNotificationKind {
+    Info,
+    Warning,
+    Error,
+}
+
+pub fn notify(title: &str, body: &str, kind: TrayNotificationKind) {
+    #[cfg(target_os = "windows")]
+    {
+        win32::enqueue_notification(title, body, kind);
+        return;
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (title, body, kind);
+    }
+}

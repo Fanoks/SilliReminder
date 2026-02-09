@@ -3,11 +3,7 @@ use std::io::prelude::*;
 use std::path::PathBuf;
 
 fn settings_path() -> PathBuf {
-    // Store settings next to the executable so autostart (different CWD) still works.
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join("settings.sillisettings")))
-        .unwrap_or_else(|| PathBuf::from("settings.sillisettings"))
+    crate::paths::app_data_dir().join("settings.sillisettings")
 }
 
 pub fn load_setting() -> std::io::Result<bool> {
@@ -27,6 +23,10 @@ pub fn load_setting() -> std::io::Result<bool> {
 
 pub fn save_setting(system_start: bool) -> std::io::Result<()> {
     let path = settings_path();
+
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
 
     let mut file = OpenOptions::new()
         .create(true)

@@ -16,8 +16,11 @@
 //! - We treat all Win32 return values as best-effort; failures are non-fatal.
 
 use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::Mutex;
 use std::sync::mpsc::Sender;
 use std::sync::OnceLock;
+
+use std::collections::VecDeque;
 
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::*;
@@ -26,15 +29,27 @@ use windows::Win32::UI::Shell::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use super::TrayCommand;
+use crate::tray::TrayNotificationKind;
+use crate::i18n;
 
 static TRAY_SENDER: OnceLock<Sender<TrayCommand>> = OnceLock::new();
 static REQUEST_REPAINT: OnceLock<fn()> = OnceLock::new();
 static MAIN_HWND: AtomicIsize = AtomicIsize::new(0);
+static TRAY_HWND: AtomicIsize = AtomicIsize::new(0);
+static NOTIFY_QUEUE: OnceLock<Mutex<VecDeque<QueuedNotification>>> = OnceLock::new();
 
 const WM_TRAYICON: u32 = WM_APP + 1;
+const WM_TRAY_NOTIFY: u32 = WM_APP + 2;
 const ID_MENU_OPEN: usize = 1;
 const ID_MENU_EXIT: usize = 2;
 const RESTORE_DELAY_MS: u64 = 200;
+
+#[derive(Debug, Clone)]
+struct QueuedNotification {
+    title: String,
+    body: String,
+    kind: TrayNotificationKind,
+}
 
 pub(super) fn set_main_window_hwnd(hwnd: isize) {
     MAIN_HWND.store(hwnd, Ordering::Relaxed);
@@ -46,8 +61,108 @@ pub(super) fn set_main_window_hwnd(hwnd: isize) {
 pub(super) fn spawn_tray(sender: Sender<TrayCommand>, request_repaint: fn()) {
     let _ = TRAY_SENDER.set(sender);
     let _ = REQUEST_REPAINT.set(request_repaint);
+    let _ = NOTIFY_QUEUE.set(Mutex::new(VecDeque::new()));
 
     std::thread::spawn(move || run_tray_loop());
+}
+
+pub(super) fn enqueue_notification(title: &str, body: &str, kind: TrayNotificationKind) {
+    let Some(queue) = NOTIFY_QUEUE.get() else {
+        return;
+    };
+
+    {
+        let mut q = queue.lock().unwrap_or_else(|p| p.into_inner());
+        q.push_back(QueuedNotification {
+            title: title.to_owned(),
+            body: body.to_owned(),
+            kind,
+        });
+    }
+
+    let raw = TRAY_HWND.load(Ordering::Relaxed);
+    if raw == 0 {
+        return;
+    }
+    let hwnd = HWND(raw as *mut core::ffi::c_void);
+    if hwnd.0.is_null() {
+        return;
+    }
+
+    unsafe {
+        // SAFETY: Win32 FFI call. `hwnd` is an OS handle; we don't dereference it.
+        let _ = PostMessageW(Some(hwnd), WM_TRAY_NOTIFY, WPARAM(0), LPARAM(0));
+    }
+}
+
+fn copy_wide_trunc(dst: &mut [u16], s: &str) {
+    let mut it = s.encode_utf16();
+    if dst.is_empty() {
+        return;
+    }
+
+    let mut i = 0usize;
+    while i + 1 < dst.len() {
+        match it.next() {
+            Some(ch) => {
+                dst[i] = ch;
+                i += 1;
+            }
+            None => break,
+        }
+    }
+    dst[i] = 0;
+}
+
+fn show_balloon(hwnd: HWND, n: &QueuedNotification) {
+    let mut nid = NOTIFYICONDATAW::default();
+    nid.cbSize = std::mem::size_of::<NOTIFYICONDATAW>() as u32;
+    nid.hWnd = hwnd;
+    nid.uID = 1;
+    nid.uFlags = NIF_INFO;
+
+    copy_wide_trunc(&mut nid.szInfoTitle, &n.title);
+    copy_wide_trunc(&mut nid.szInfo, &n.body);
+
+    nid.dwInfoFlags = match n.kind {
+        TrayNotificationKind::Info => NIIF_INFO,
+        TrayNotificationKind::Warning => NIIF_WARNING,
+        TrayNotificationKind::Error => NIIF_ERROR,
+    };
+
+    unsafe {
+        // SAFETY: Best-effort Win32 notification update.
+        let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
+    }
+}
+
+fn spawn_message_box(n: QueuedNotification) {
+    // Spawn a dedicated thread so we don't block the tray message pump.
+    std::thread::spawn(move || {
+        let mut title_w: Vec<u16> = n.title.encode_utf16().collect();
+        title_w.push(0);
+
+        let mut body_w: Vec<u16> = n.body.encode_utf16().collect();
+        body_w.push(0);
+
+        let icon = match n.kind {
+            TrayNotificationKind::Info => MB_ICONINFORMATION,
+            TrayNotificationKind::Warning => MB_ICONWARNING,
+            TrayNotificationKind::Error => MB_ICONERROR,
+        };
+
+        let flags = MB_OK | icon | MB_TOPMOST | MB_SETFOREGROUND;
+
+        unsafe {
+            // SAFETY: Win32 modal dialog. Strings are null-terminated and live for the call.
+            let _ = MessageBoxW(
+                None,
+                PCWSTR(body_w.as_ptr()),
+                PCWSTR(title_w.as_ptr()),
+                flags,
+            );
+        }
+    });
 }
 
 fn request_repaint() {
@@ -147,6 +262,8 @@ fn run_tray_loop() {
         return;
     }
 
+    TRAY_HWND.store(hwnd.0 as isize, Ordering::Relaxed);
+
     // Prefer the icon embedded into the EXE resources (icon id 1).
     let mut hicon = unsafe { LoadIconW(Some(hmodule.into()), PCWSTR(1usize as *const u16)) }
         .unwrap_or_default();
@@ -162,12 +279,8 @@ fn run_tray_loop() {
     nid.uCallbackMessage = WM_TRAYICON;
     nid.hIcon = hicon;
 
-    let tip = "SilliReminder";
-    let mut wide: Vec<u16> = tip.encode_utf16().collect();
-    wide.push(0);
-    for (dst, src) in nid.szTip.iter_mut().zip(wide.iter()) {
-        *dst = *src;
-    }
+    let tip = i18n::tray_tooltip(i18n::language());
+    copy_wide_trunc(&mut nid.szTip, tip);
 
     unsafe {
         // SAFETY: Adds the tray icon. `nid` lives for the duration of the message loop.
@@ -213,6 +326,19 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
             }
             LRESULT(0)
         }
+        WM_TRAY_NOTIFY => {
+            if let Some(queue) = NOTIFY_QUEUE.get() {
+                let n = {
+                    let mut q = queue.lock().unwrap_or_else(|p| p.into_inner());
+                    q.pop_front()
+                };
+                if let Some(n) = n {
+                    show_balloon(hwnd, &n);
+                    spawn_message_box(n);
+                }
+            }
+            LRESULT(0)
+        }
         WM_COMMAND => {
             let id = (wparam.0 & 0xffff) as usize;
             if let Some(sender) = TRAY_SENDER.get() {
@@ -254,10 +380,20 @@ fn show_menu(hwnd: HWND) {
         return;
     }
 
+    fn wide_null(s: &str) -> Vec<u16> {
+        let mut v: Vec<u16> = s.encode_utf16().collect();
+        v.push(0);
+        v
+    }
+
+    let lang = i18n::language();
+    let open_w = wide_null(i18n::tray_open(lang));
+    let exit_w = wide_null(i18n::tray_exit(lang));
+
     unsafe {
         // SAFETY: Win32 FFI calls to populate the menu.
-        let _ = AppendMenuW(hmenu, MF_STRING, ID_MENU_OPEN, w!("Open"));
-        let _ = AppendMenuW(hmenu, MF_STRING, ID_MENU_EXIT, w!("Exit"));
+        let _ = AppendMenuW(hmenu, MF_STRING, ID_MENU_OPEN, PCWSTR(open_w.as_ptr()));
+        let _ = AppendMenuW(hmenu, MF_STRING, ID_MENU_EXIT, PCWSTR(exit_w.as_ptr()));
     }
 
     let mut point = POINT::default();

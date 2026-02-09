@@ -2,7 +2,10 @@
 
 mod app;
 mod autostart;
+mod debug_log;
 mod db_operations;
+mod i18n;
+mod paths;
 mod settings;
 mod tray;
 mod widgets;
@@ -29,6 +32,8 @@ fn is_autostart_launch() -> bool {
 }
 
 fn main() -> eframe::Result<()> {
+    i18n::init();
+
     let system_start = settings::load_setting().unwrap_or(false);
     let background = is_background_mode();
     let autostart_launch = is_autostart_launch();
@@ -38,7 +43,7 @@ fn main() -> eframe::Result<()> {
 
     // Ensure registry matches the saved setting at startup.
     if let Err(err) = autostart::set_enabled(system_start) {
-        eprintln!("failed to sync autostart on startup: {err}");
+        debug_err!("failed to sync autostart on startup: {err}");
     }
 
     if autostart_launch && !system_start {
@@ -65,7 +70,7 @@ fn main() -> eframe::Result<()> {
     };
 
     eframe::run_native(
-        "Silly Reminder",
+        i18n::app_title(i18n::language()),
         options,
         Box::new(move |cc| {
             tray::set_repaint_context(cc.egui_ctx.clone());

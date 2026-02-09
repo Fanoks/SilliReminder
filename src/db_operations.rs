@@ -15,12 +15,14 @@ mod path;
 mod queries;
 mod schema;
 mod types;
+mod update;
 
 pub use connection::get_db;
 pub use delete::delete_reminder;
 pub use insert::insert_reminder;
 pub use queries::list_reminders;
 pub use types::Reminder;
+pub use update::set_reminder_notified_level;
 // More helpers exist in submodules (delete/update/get) when needed.
 
 // Internal-only items shared across db submodules.

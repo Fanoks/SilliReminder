@@ -5,7 +5,8 @@ use chrono::{NaiveDate};
 pub struct Reminder {
     pub id: i64,
     pub date: NaiveDate,
-    pub note: String
+    pub note: String,
+    pub notified_level: u8,
 }
 
 pub(in crate::db_operations) fn parse_db_date(date_str: &str) -> rusqlite::Result<NaiveDate> {

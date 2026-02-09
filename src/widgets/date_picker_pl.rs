@@ -5,6 +5,8 @@ use eframe::egui::{
 };
 use std::ops::RangeInclusive;
 
+use crate::i18n::{self, Language};
+
 #[derive(Default, Clone)]
 struct DatePickerPlState {
     picker_visible: bool,
@@ -29,6 +31,7 @@ pub struct DatePickerPlButton<'a> {
     calendar: bool,
     calendar_week: bool,
     highlight_weekends: bool,
+    language: Language,
 }
 
 impl<'a> DatePickerPlButton<'a> {
@@ -44,7 +47,14 @@ impl<'a> DatePickerPlButton<'a> {
             calendar: true,
             calendar_week: true,
             highlight_weekends: true,
+            language: i18n::language(),
         }
+    }
+
+    /// Set picker language (defaults to detected app language).
+    pub fn language(mut self, language: Language) -> Self {
+        self.language = language;
+        self
     }
 
     /// Must be set if you have multiple date pickers in the same `Ui`.
@@ -189,7 +199,7 @@ impl Widget for DatePickerPlButton<'_> {
 
                             if self.combo_boxes {
                                 ui.horizontal(|ui| {
-                                    ui.label("Rok:");
+                                    ui.label(i18n::date_picker_year(self.language));
                                     ComboBox::from_id_salt("date_picker_pl_year")
                                         .selected_text(state.year.to_string())
                                         .show_ui(ui, |ui| {
@@ -215,14 +225,20 @@ impl Widget for DatePickerPlButton<'_> {
                                         });
 
                                     ComboBox::from_id_salt("date_picker_pl_month")
-                                        .selected_text(month_name_pl(state.month))
+                                        .selected_text(i18n::date_picker_month_name(
+                                            self.language,
+                                            state.month,
+                                        ))
                                         .show_ui(ui, |ui| {
                                             for month in 1..=12 {
                                                 if ui
                                                     .selectable_value(
                                                         &mut state.month,
                                                         month,
-                                                        month_name_pl(month),
+                                                        i18n::date_picker_month_name(
+                                                            self.language,
+                                                            month,
+                                                        ),
                                                     )
                                                     .changed()
                                                 {
@@ -255,11 +271,11 @@ impl Widget for DatePickerPlButton<'_> {
                                         .clicked()
                                     };
 
-                                    if arrow(ui, "<<<", "odejmij 1 rok") {
+                                    if arrow(ui, "<<<", i18n::date_picker_hover_year_minus(self.language)) {
                                         state.year -= 1;
                                         state.day = state.day.min(last_day_of_month(state.year, state.month));
                                     }
-                                    if arrow(ui, "<<", "odejmij 1 miesiąc") {
+                                    if arrow(ui, "<<", i18n::date_picker_hover_month_minus(self.language)) {
                                         state.month = state.month.saturating_sub(1);
                                         if state.month == 0 {
                                             state.month = 12;
@@ -267,7 +283,7 @@ impl Widget for DatePickerPlButton<'_> {
                                         }
                                         state.day = state.day.min(last_day_of_month(state.year, state.month));
                                     }
-                                    if arrow(ui, "<", "odejmij 1 dzień") {
+                                    if arrow(ui, "<", i18n::date_picker_hover_day_minus(self.language)) {
                                         state.day = state.day.saturating_sub(1);
                                         if state.day == 0 {
                                             state.month = state.month.saturating_sub(1);
@@ -278,7 +294,7 @@ impl Widget for DatePickerPlButton<'_> {
                                             state.day = last_day_of_month(state.year, state.month);
                                         }
                                     }
-                                    if arrow(ui, ">", "dodaj 1 dzień") {
+                                    if arrow(ui, ">", i18n::date_picker_hover_day_plus(self.language)) {
                                         state.day += 1;
                                         if state.day > last_day_of_month(state.year, state.month) {
                                             state.day = 1;
@@ -289,7 +305,7 @@ impl Widget for DatePickerPlButton<'_> {
                                             }
                                         }
                                     }
-                                    if arrow(ui, ">>", "dodaj 1 miesiąc") {
+                                    if arrow(ui, ">>", i18n::date_picker_hover_month_plus(self.language)) {
                                         state.month += 1;
                                         if state.month > 12 {
                                             state.month = 1;
@@ -297,7 +313,7 @@ impl Widget for DatePickerPlButton<'_> {
                                         }
                                         state.day = state.day.min(last_day_of_month(state.year, state.month));
                                     }
-                                    if arrow(ui, ">>>", "dodaj 1 rok") {
+                                    if arrow(ui, ">>>", i18n::date_picker_hover_year_plus(self.language)) {
                                         state.year += 1;
                                         state.day = state.day.min(last_day_of_month(state.year, state.month));
                                     }
@@ -316,10 +332,13 @@ impl Widget for DatePickerPlButton<'_> {
                                         .spacing([2.0, 2.0])
                                         .show(ui, |ui| {
                                             if self.calendar_week {
-                                                ui.label(RichText::new("Tydz.").strong());
+                                                ui.label(
+                                                    RichText::new(i18n::date_picker_week(self.language))
+                                                        .strong(),
+                                                );
                                             }
 
-                                            for name in ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"] {
+                                            for name in i18n::date_picker_weekdays(self.language) {
                                                 ui.label(RichText::new(name).strong());
                                             }
                                             ui.end_row();
@@ -395,13 +414,25 @@ impl Widget for DatePickerPlButton<'_> {
                                 cols[0].allocate_space(egui::Vec2::ZERO);
 
                                 cols[1].with_layout(Layout::top_down(Align::Center), |ui| {
-                                    if ui.add_sized([80.0, 24.0], Button::new("Anuluj")).clicked() {
+                                    if ui
+                                        .add_sized(
+                                            [80.0, 24.0],
+                                            Button::new(i18n::date_picker_cancel(self.language)),
+                                        )
+                                        .clicked()
+                                    {
                                         close = true;
                                     }
                                 });
 
                                 cols[2].with_layout(Layout::top_down(Align::Center), |ui| {
-                                    if ui.add_sized([80.0, 24.0], Button::new("Zapisz")).clicked() {
+                                    if ui
+                                        .add_sized(
+                                            [80.0, 24.0],
+                                            Button::new(i18n::date_picker_save(self.language)),
+                                        )
+                                        .clicked()
+                                    {
                                         *self.selection = NaiveDate::from_ymd_opt(
                                             state.year,
                                             state.month,
@@ -480,22 +511,4 @@ fn month_weeks_monday_start(year: i32, month: u32) -> Vec<Vec<NaiveDate>> {
     }
 
     weeks
-}
-
-fn month_name_pl(month: u32) -> &'static str {
-    match month {
-        1 => "Styczeń",
-        2 => "Luty",
-        3 => "Marzec",
-        4 => "Kwiecień",
-        5 => "Maj",
-        6 => "Czerwiec",
-        7 => "Lipiec",
-        8 => "Sierpień",
-        9 => "Wrzesień",
-        10 => "Październik",
-        11 => "Listopad",
-        12 => "Grudzień",
-        _ => "?",
-    }
 }
