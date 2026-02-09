@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,6 +102,13 @@ pub fn ui_db_read_error(lang: Language) -> &'static str {
 
 pub fn tray_tooltip(_lang: Language) -> &'static str {
     "SilliReminder"
+}
+
+pub fn footer(lang: Language, version: &str) -> String {
+    match lang {
+        Language::Pl => format!("© Jakub Konieczny. Wszelkie prawa zastrzeżone. v{version}"),
+        Language::En => format!("© Jakub Konieczny. All rights reserved. v{version}"),
+    }
 }
 
 pub fn tray_open(lang: Language) -> &'static str {

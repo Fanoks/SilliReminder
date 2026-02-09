@@ -164,6 +164,20 @@ impl SilliReminder {
     }
 
     fn ui_main(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::bottom("footer")
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(2.0);
+                    ui.label(
+                        RichText::new(i18n::footer(self.lang, env!("CARGO_PKG_VERSION")))
+                            .size(11.0)
+                            .weak(),
+                    );
+                    ui.add_space(2.0);
+                });
+            });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical(|ui| {
                 ui.vertical_centered(|ui| {
