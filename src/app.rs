@@ -1,10 +1,13 @@
 use std::sync::mpsc;
 use std::time::Duration;
+use std::{cell::RefCell, rc::Rc};
 
+use chrono::{Local, NaiveDate};
 use eframe::egui::{self, Color32, RichText};
 use raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
+use rusqlite::Connection;
 
-use crate::{autostart, settings, tray::TrayCommand};
+use crate::{autostart, db_operations, settings, tray::TrayCommand};
 
 /// Main application state and UI.
 ///
@@ -28,10 +31,21 @@ pub struct SilliReminder {
     ignore_close_frames: u8,
     hwnd_set: bool,
     tray_rx: mpsc::Receiver<TrayCommand>,
+    selected_date: NaiveDate,
+    note_input: String,
+    db: Option<Rc<RefCell<Connection>>>,
 }
 
 impl SilliReminder {
     pub fn new(system_start: bool, background: bool, tray_rx: mpsc::Receiver<TrayCommand>) -> Self {
+        let db = match db_operations::get_db() {
+            Ok(db) => Some(db),
+            Err(err) => {
+                eprintln!("failed to open database: {err}");
+                None
+            }
+        };
+
         Self {
             system_start,
             background,
@@ -39,7 +53,144 @@ impl SilliReminder {
             ignore_close_frames: 0,
             hwnd_set: false,
             tray_rx,
+            selected_date: Local::now().date_naive(),
+            note_input: String::new(),
+            db,
         }
+    }
+
+    fn ui_main(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.vertical_centered(|ui| {
+                self.ui_header(ui);
+                self.ui_settings(ui);
+                self.ui_sections(ui);
+                self.ui_planed(ui);
+            });
+        });
+    }
+
+    fn ui_header(&mut self, ui: &mut egui::Ui) {
+        ui.label(
+            RichText::new("Silly Reminder")
+                .size(40.0)
+                .strong()
+                .color(Color32::KHAKI),
+        );
+    }
+
+    fn ui_settings(&mut self, ui: &mut egui::Ui) {
+        ui.label(RichText::new("Ustawienia").size(25.0).strong().color(Color32::KHAKI));
+        ui.group(|ui| {
+            let response = ui.checkbox(&mut self.system_start, "Włącz podaczas włączania systemu");
+
+            if response.changed() {
+                println!("system_start toggled -> {}", self.system_start);
+
+                if let Err(err) = autostart::set_enabled(self.system_start) {
+                    eprintln!("failed to update autostart: {err}");
+                }
+
+                if let Err(err) = settings::save_setting(self.system_start) {
+                    eprintln!("failed to save setting: {err}");
+                }
+            }
+        });
+    }
+
+    fn ui_sections(&mut self, ui: &mut egui::Ui) {
+        ui.label(RichText::new("Dodaj").size(25.0).strong().color(Color32::KHAKI));
+        ui.group(|ui| {
+            ui.horizontal(|ui| {
+                let response: egui::Response = ui.add(
+                    crate::widgets::DatePickerPlButton::new(&mut self.selected_date)
+                        .id_salt("reminder_date")
+                        .format("%Y-%m-%d"),
+                );
+                let note_response: egui::Response = ui.add(
+                    egui::TextEdit::singleline(&mut self.note_input)
+                    .id_salt("note_input")
+                    .hint_text("Notatka...")
+                );
+
+                if ui.button("Dodaj").clicked() {
+                    if let Some(db) = &self.db {
+                        let note = self.note_input.trim();
+                        if note.is_empty() {
+                            eprintln!("note is empty; nothing inserted");
+                        } else {
+                            match db_operations::insert_reminder(&db.borrow(), self.selected_date, note) {
+                                Ok(id) => {
+                                    println!("Dodano #{id}: {}, {}", self.selected_date, note);
+                                    self.note_input.clear();
+                                }
+                                Err(err) => eprintln!("failed to insert reminder: {err}"),
+                            }
+                        }
+                    } else {
+                        eprintln!("database not available");
+                    }
+                }
+
+                if response.changed() {
+                    println!("Selected date -> {}", self.selected_date);
+                }
+
+                if note_response.changed() {
+                    println!("Note -> {}", self.note_input);
+                }
+            });
+        });
+    }
+    
+    fn ui_planed(&mut self, ui: &mut egui::Ui) {
+        ui.label(RichText::new("Zaplanowane").size(25.0).strong().color(Color32::KHAKI));
+        ui.group(|ui| {
+            ui.vertical_centered(|ui| {
+                let Some(db) = &self.db else {
+                    ui.label("Brak bazy danych");
+                    return;
+                };
+
+                match db_operations::list_reminders(&db.borrow()) {
+                    Ok(reminders) => {
+                        if reminders.is_empty() {
+                            ui.label("(pusto)");
+                        } else {
+                            let mut delete_id: Option<i64> = None;
+
+                            for r in reminders.iter() {
+                                ui.push_id(r.id, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(format!("{}  -  {}", r.date, r.note));
+                                        let remaining = ui.available_width();
+                                        ui.allocate_ui_with_layout(
+                                            egui::vec2(remaining, 0.0),
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                if ui.button("X").clicked() {
+                                                    delete_id = Some(r.id);
+                                                }
+                                            },
+                                        );
+                                    });
+                                });
+                            }
+
+                            if let Some(id) = delete_id {
+                                if let Err(err) = db_operations::delete_reminder(&db.borrow(), id) {
+                                    eprintln!("failed to delete reminder {id}: {err}");
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        ui.label("Błąd odczytu bazy");
+                        eprintln!("failed to list reminders: {err}");
+                    }
+                }
+            });
+        });
     }
 
     fn hide_to_tray(&mut self, ctx: &egui::Context) {
@@ -90,7 +241,7 @@ impl eframe::App for SilliReminder {
         for cmd in commands {
             match cmd {
                 TrayCommand::Open => self.show_window(ctx),
-                TrayCommand::Exit => self.exit_app(ctx),
+                TrayCommand::Exit => self.exit_app(ctx)
             }
         }
 
@@ -118,38 +269,6 @@ impl eframe::App for SilliReminder {
             return;
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.vertical_centered(|ui| {
-                ui.label(
-                    RichText::new("Silly Reminder")
-                        .size(40.0)
-                        .strong()
-                        .color(Color32::KHAKI),
-                );
-
-                ui.label(RichText::new("Ustawienia").size(25.0).strong().color(Color32::KHAKI));
-                ui.group(|ui| {
-                    let response = ui.checkbox(
-                        &mut self.system_start,
-                        "Włącz podaczas włączania systemu",
-                    );
-
-                    if response.changed() {
-                        println!("system_start toggled -> {}", self.system_start);
-
-                        if let Err(err) = autostart::set_enabled(self.system_start) {
-                            eprintln!("failed to update autostart: {err}");
-                        }
-
-                        if let Err(err) = settings::save_setting(self.system_start) {
-                            eprintln!("failed to save setting: {err}");
-                        }
-                    }
-                });
-
-                ui.label(RichText::new("Dodaj").size(25.0).strong().color(Color32::KHAKI));
-                ui.label(RichText::new("Zaplanowane").size(25.0).strong().color(Color32::KHAKI));
-            });
-        });
+        self.ui_main(ctx);
     }
 }

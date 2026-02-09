@@ -2,9 +2,11 @@
 
 mod app;
 mod autostart;
+mod db_operations;
 mod icons;
 mod settings;
 mod tray;
+mod widgets;
 
 use eframe::egui;
 use std::sync::mpsc;
@@ -37,7 +39,7 @@ fn main() -> eframe::Result<()> {
     }
 
     let mut viewport = egui::ViewportBuilder::default()
-        .with_inner_size([450.0, 600.0])
+        .with_inner_size([500.0, 600.0])
         // Tray-first UX (like AV apps): keep the app out of the taskbar.
         .with_taskbar(false)
         // Avoid `Visible(false)` because it can stop the repaint/update loop,
