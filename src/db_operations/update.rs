@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 pub fn set_reminder_notified_level(
     conn: &Connection,

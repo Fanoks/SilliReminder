@@ -8,10 +8,10 @@ use eframe::egui::{self, RichText};
 use raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
 use rusqlite::Connection;
 
-use crate::{debug_err, debug_log};
-use crate::{autostart, db_operations, settings, tray::TrayCommand};
-use crate::tray::{TrayNotificationKind};
 use crate::i18n::{self, Language};
+use crate::tray::TrayNotificationKind;
+use crate::{autostart, db_operations, settings, tray::TrayCommand};
+use crate::{debug_err, debug_log};
 
 /// Main application state and UI.
 ///
@@ -138,7 +138,9 @@ impl SilliReminder {
                 });
             }
 
-            if let Err(err) = db_operations::set_reminder_notified_level(&db.borrow(), r.id, current_level) {
+            if let Err(err) =
+                db_operations::set_reminder_notified_level(&db.borrow(), r.id, current_level)
+            {
                 debug_err!("failed to persist notified_level for {}: {err}", r.id);
             }
         }
@@ -216,7 +218,10 @@ impl SilliReminder {
                 .color(accent),
         );
         ui.group(|ui| {
-            let response = ui.checkbox(&mut self.system_start, i18n::ui_start_with_system(self.lang));
+            let response = ui.checkbox(
+                &mut self.system_start,
+                i18n::ui_start_with_system(self.lang),
+            );
 
             if response.changed() {
                 debug_log!("system_start toggled -> {}", self.system_start);
@@ -280,18 +285,19 @@ impl SilliReminder {
                 if let Some(db) = &self.db {
                     let note = self.note_input.trim();
                     if note.is_empty() {
-                            debug_err!("note is empty; nothing inserted");
+                        debug_err!("note is empty; nothing inserted");
                     } else {
-                        match db_operations::insert_reminder(&db.borrow(), self.selected_date, note) {
+                        match db_operations::insert_reminder(&db.borrow(), self.selected_date, note)
+                        {
                             Ok(id) => {
-                                    debug_log!("Dodano #{id}: {}, {}", self.selected_date, note);
+                                debug_log!("Dodano #{id}: {}, {}", self.selected_date, note);
                                 self.note_input.clear();
                             }
-                                Err(err) => debug_err!("failed to insert reminder: {err}"),
+                            Err(err) => debug_err!("failed to insert reminder: {err}"),
                         }
                     }
                 } else {
-                        debug_err!("database not available");
+                    debug_err!("database not available");
                 }
             }
 
@@ -304,7 +310,7 @@ impl SilliReminder {
             }
         });
     }
-    
+
     fn ui_planed(&mut self, ui: &mut egui::Ui) {
         let accent = ui.visuals().hyperlink_color;
         ui.label(
@@ -337,7 +343,9 @@ impl SilliReminder {
                                         ui.push_id(r.id, |ui| {
                                             egui::Frame::NONE
                                                 .fill(ui.visuals().faint_bg_color)
-                                                .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                                                .stroke(
+                                                    ui.visuals().widgets.noninteractive.bg_stroke,
+                                                )
                                                 .corner_radius(egui::CornerRadius::same(6))
                                                 .inner_margin(egui::Margin::symmetric(8, 6))
                                                 .show(ui, |ui| {
@@ -350,7 +358,8 @@ impl SilliReminder {
                                                             .max(text_size + 10.0);
 
                                                         let today = Local::now().date_naive();
-                                                        let days_until = (r.date - today).num_days();
+                                                        let days_until =
+                                                            (r.date - today).num_days();
                                                         let reminder_color = if days_until > 7 {
                                                             ui.visuals().text_color()
                                                         } else if days_until > 3 {
@@ -372,15 +381,24 @@ impl SilliReminder {
                                                         let remaining = ui.available_width();
                                                         ui.allocate_ui_with_layout(
                                                             egui::vec2(remaining, 0.0),
-                                                            egui::Layout::right_to_left(egui::Align::Center),
+                                                            egui::Layout::right_to_left(
+                                                                egui::Align::Center,
+                                                            ),
                                                             |ui| {
-                                                                let danger = ui.visuals().error_fg_color;
+                                                                let danger =
+                                                                    ui.visuals().error_fg_color;
                                                                 let x = egui::Button::new(
                                                                     RichText::new("X")
                                                                         .size(22.0)
                                                                         .color(danger),
                                                                 );
-                                                                if ui.add_sized(egui::vec2(36.0, row_h), x).clicked() {
+                                                                if ui
+                                                                    .add_sized(
+                                                                        egui::vec2(36.0, row_h),
+                                                                        x,
+                                                                    )
+                                                                    .clicked()
+                                                                {
                                                                     delete_id = Some(r.id);
                                                                 }
                                                             },
@@ -456,7 +474,7 @@ impl eframe::App for SilliReminder {
         for cmd in commands {
             match cmd {
                 TrayCommand::Open => self.show_window(ctx),
-                TrayCommand::Exit => self.exit_app(ctx)
+                TrayCommand::Exit => self.exit_app(ctx),
             }
         }
 

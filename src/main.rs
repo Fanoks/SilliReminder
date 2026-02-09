@@ -2,8 +2,8 @@
 
 mod app;
 mod autostart;
-mod debug_log;
 mod db_operations;
+mod debug_log;
 mod i18n;
 mod paths;
 mod settings;
@@ -74,7 +74,11 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             tray::set_repaint_context(cc.egui_ctx.clone());
-            Ok(Box::new(app::SilliReminder::new(system_start, background, tray_rx)))
+            Ok(Box::new(app::SilliReminder::new(
+                system_start,
+                background,
+                tray_rx,
+            )))
         }),
     )
 }

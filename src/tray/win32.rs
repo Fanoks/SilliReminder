@@ -15,22 +15,22 @@
 //!   runs until `PostQuitMessage` is called.
 //! - We treat all Win32 return values as best-effort; failures are non-fatal.
 
-use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Mutex;
-use std::sync::mpsc::Sender;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::mpsc::Sender;
 
 use std::collections::VecDeque;
 
-use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Shell::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
+use windows::core::{PCWSTR, w};
 
 use super::TrayCommand;
-use crate::tray::TrayNotificationKind;
 use crate::i18n;
+use crate::tray::TrayNotificationKind;
 
 static TRAY_SENDER: OnceLock<Sender<TrayCommand>> = OnceLock::new();
 static REQUEST_REPAINT: OnceLock<fn()> = OnceLock::new();
@@ -306,7 +306,12 @@ fn run_tray_loop() {
 /// Win32 window procedure for the hidden tray window.
 ///
 /// Required by Win32. Keep it small and side-effect-light.
-unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+unsafe extern "system" fn wnd_proc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
     match msg {
         WM_TRAYICON => {
             let event = lparam.0 as u32;

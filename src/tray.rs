@@ -1,5 +1,5 @@
-use std::sync::mpsc::Sender;
 use std::sync::OnceLock;
+use std::sync::mpsc::Sender;
 
 use eframe::egui;
 

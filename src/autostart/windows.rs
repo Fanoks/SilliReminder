@@ -12,8 +12,8 @@ pub(super) fn add_to_autostart() -> Result<(), Box<dyn Error>> {
     /// - The exe path is quoted to handle spaces.
     /// - We include `--autostart` so the app can start minimized/background.
     use std::env;
-    use winreg::enums::*;
     use winreg::RegKey;
+    use winreg::enums::*;
 
     let exe_path = env::current_exe()?;
 
@@ -31,11 +31,11 @@ pub(super) fn add_to_autostart() -> Result<(), Box<dyn Error>> {
 }
 
 pub(super) fn remove_from_autostart() -> Result<(), Box<dyn Error>> {
+    use winreg::RegKey;
     /// Disable autostart for the current user.
     ///
     /// Deleting a missing value is treated as success (idempotent operation).
     use winreg::enums::*;
-    use winreg::RegKey;
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let run_key = hkcu.open_subkey_with_flags(

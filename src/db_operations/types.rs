@@ -1,4 +1,4 @@
-use chrono::{NaiveDate};
+use chrono::NaiveDate;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]

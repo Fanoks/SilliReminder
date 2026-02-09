@@ -2,7 +2,7 @@ use std::error::Error;
 
 use rusqlite::Connection;
 
-use super::{parse_db_date, Reminder};
+use super::{Reminder, parse_db_date};
 
 pub fn list_reminders(conn: &Connection) -> Result<Vec<Reminder>, Box<dyn Error>> {
     let mut stmt = conn.prepare(

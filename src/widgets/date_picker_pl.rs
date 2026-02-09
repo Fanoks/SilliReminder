@@ -203,7 +203,8 @@ impl Widget for DatePickerPlButton<'_> {
                                     ComboBox::from_id_salt("date_picker_pl_year")
                                         .selected_text(state.year.to_string())
                                         .show_ui(ui, |ui| {
-                                            let (start_year, end_year) = match &self.start_end_years {
+                                            let (start_year, end_year) = match &self.start_end_years
+                                            {
                                                 Some(range) => (*range.start(), *range.end()),
                                                 None => (today.year() - 100, today.year() + 10),
                                             };
@@ -217,9 +218,10 @@ impl Widget for DatePickerPlButton<'_> {
                                                     )
                                                     .changed()
                                                 {
-                                                    state.day = state
-                                                        .day
-                                                        .min(last_day_of_month(state.year, state.month));
+                                                    state.day = state.day.min(last_day_of_month(
+                                                        state.year,
+                                                        state.month,
+                                                    ));
                                                 }
                                             }
                                         });
@@ -242,9 +244,10 @@ impl Widget for DatePickerPlButton<'_> {
                                                     )
                                                     .changed()
                                                 {
-                                                    state.day = state
-                                                        .day
-                                                        .min(last_day_of_month(state.year, state.month));
+                                                    state.day = state.day.min(last_day_of_month(
+                                                        state.year,
+                                                        state.month,
+                                                    ));
                                                 }
                                             }
                                         });
@@ -254,7 +257,11 @@ impl Widget for DatePickerPlButton<'_> {
                                         .show_ui(ui, |ui| {
                                             let last = last_day_of_month(state.year, state.month);
                                             for day in 1..=last {
-                                                ui.selectable_value(&mut state.day, day, day.to_string());
+                                                ui.selectable_value(
+                                                    &mut state.day,
+                                                    day,
+                                                    day.to_string(),
+                                                );
                                             }
                                         });
                                 });
@@ -271,19 +278,35 @@ impl Widget for DatePickerPlButton<'_> {
                                         .clicked()
                                     };
 
-                                    if arrow(ui, "<<<", i18n::date_picker_hover_year_minus(self.language)) {
+                                    if arrow(
+                                        ui,
+                                        "<<<",
+                                        i18n::date_picker_hover_year_minus(self.language),
+                                    ) {
                                         state.year -= 1;
-                                        state.day = state.day.min(last_day_of_month(state.year, state.month));
+                                        state.day = state
+                                            .day
+                                            .min(last_day_of_month(state.year, state.month));
                                     }
-                                    if arrow(ui, "<<", i18n::date_picker_hover_month_minus(self.language)) {
+                                    if arrow(
+                                        ui,
+                                        "<<",
+                                        i18n::date_picker_hover_month_minus(self.language),
+                                    ) {
                                         state.month = state.month.saturating_sub(1);
                                         if state.month == 0 {
                                             state.month = 12;
                                             state.year -= 1;
                                         }
-                                        state.day = state.day.min(last_day_of_month(state.year, state.month));
+                                        state.day = state
+                                            .day
+                                            .min(last_day_of_month(state.year, state.month));
                                     }
-                                    if arrow(ui, "<", i18n::date_picker_hover_day_minus(self.language)) {
+                                    if arrow(
+                                        ui,
+                                        "<",
+                                        i18n::date_picker_hover_day_minus(self.language),
+                                    ) {
                                         state.day = state.day.saturating_sub(1);
                                         if state.day == 0 {
                                             state.month = state.month.saturating_sub(1);
@@ -294,7 +317,11 @@ impl Widget for DatePickerPlButton<'_> {
                                             state.day = last_day_of_month(state.year, state.month);
                                         }
                                     }
-                                    if arrow(ui, ">", i18n::date_picker_hover_day_plus(self.language)) {
+                                    if arrow(
+                                        ui,
+                                        ">",
+                                        i18n::date_picker_hover_day_plus(self.language),
+                                    ) {
                                         state.day += 1;
                                         if state.day > last_day_of_month(state.year, state.month) {
                                             state.day = 1;
@@ -305,17 +332,29 @@ impl Widget for DatePickerPlButton<'_> {
                                             }
                                         }
                                     }
-                                    if arrow(ui, ">>", i18n::date_picker_hover_month_plus(self.language)) {
+                                    if arrow(
+                                        ui,
+                                        ">>",
+                                        i18n::date_picker_hover_month_plus(self.language),
+                                    ) {
                                         state.month += 1;
                                         if state.month > 12 {
                                             state.month = 1;
                                             state.year += 1;
                                         }
-                                        state.day = state.day.min(last_day_of_month(state.year, state.month));
+                                        state.day = state
+                                            .day
+                                            .min(last_day_of_month(state.year, state.month));
                                     }
-                                    if arrow(ui, ">>>", i18n::date_picker_hover_year_plus(self.language)) {
+                                    if arrow(
+                                        ui,
+                                        ">>>",
+                                        i18n::date_picker_hover_year_plus(self.language),
+                                    ) {
                                         state.year += 1;
-                                        state.day = state.day.min(last_day_of_month(state.year, state.month));
+                                        state.day = state
+                                            .day
+                                            .min(last_day_of_month(state.year, state.month));
                                     }
                                 });
                             }
@@ -333,8 +372,10 @@ impl Widget for DatePickerPlButton<'_> {
                                         .show(ui, |ui| {
                                             if self.calendar_week {
                                                 ui.label(
-                                                    RichText::new(i18n::date_picker_week(self.language))
-                                                        .strong(),
+                                                    RichText::new(i18n::date_picker_week(
+                                                        self.language,
+                                                    ))
+                                                    .strong(),
                                                 );
                                             }
 
@@ -360,9 +401,11 @@ impl Widget for DatePickerPlButton<'_> {
                                                         && day.month() == state.month
                                                         && day.day() == state.day;
 
-                                                    let mut text_color = ui.visuals().widgets.inactive.text_color();
+                                                    let mut text_color =
+                                                        ui.visuals().widgets.inactive.text_color();
                                                     if !in_month {
-                                                        text_color = text_color.linear_multiply(0.5);
+                                                        text_color =
+                                                            text_color.linear_multiply(0.5);
                                                     }
                                                     if self.highlight_weekends && is_weekend {
                                                         text_color = if ui.visuals().dark_mode {
@@ -388,7 +431,8 @@ impl Widget for DatePickerPlButton<'_> {
 
                                                     if day == today {
                                                         // Encircle today's date (like egui_extras).
-                                                        let stroke = ui.visuals().widgets.inactive.fg_stroke;
+                                                        let stroke =
+                                                            ui.visuals().widgets.inactive.fg_stroke;
                                                         ui.painter().circle_stroke(
                                                             button_response.rect.center(),
                                                             8.0,
