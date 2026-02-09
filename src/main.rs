@@ -3,13 +3,22 @@
 mod app;
 mod autostart;
 mod db_operations;
-mod icons;
 mod settings;
 mod tray;
 mod widgets;
 
 use eframe::egui;
 use std::sync::mpsc;
+
+include!(concat!(env!("OUT_DIR"), "/embedded_icon_png.rs"));
+
+fn window_icon() -> Option<egui::IconData> {
+    if ICON_PNG.is_empty() {
+        return None;
+    }
+
+    eframe::icon_data::from_png_bytes(ICON_PNG).ok()
+}
 
 fn is_background_mode() -> bool {
     std::env::args().any(|arg| arg == "--background" || arg == "--autostart")
@@ -46,7 +55,7 @@ fn main() -> eframe::Result<()> {
         // making tray “Open” unreliable.
         .with_visible(true);
 
-    if let Some(icon) = icons::window_icon() {
+    if let Some(icon) = window_icon() {
         viewport = viewport.with_icon(icon);
     }
 

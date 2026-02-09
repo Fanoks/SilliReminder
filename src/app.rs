@@ -3,7 +3,7 @@ use std::time::Duration;
 use std::{cell::RefCell, rc::Rc};
 
 use chrono::{Local, NaiveDate};
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, RichText};
 use raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
 use rusqlite::Connection;
 
@@ -61,26 +61,37 @@ impl SilliReminder {
 
     fn ui_main(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.vertical_centered(|ui| {
-                self.ui_header(ui);
-                self.ui_settings(ui);
-                self.ui_sections(ui);
-                self.ui_planed(ui);
+            ui.vertical(|ui| {
+                ui.vertical_centered(|ui| {
+                    self.ui_header(ui);
+                    self.ui_settings(ui);
+                    self.ui_sections(ui);
+                });
+
+                // Fill the remaining space with the planned list.
+                let remaining = ui.available_size();
+                ui.allocate_ui(remaining, |ui| {
+                    ui.vertical_centered(|ui| {
+                        self.ui_planed(ui);
+                    });
+                });
             });
         });
     }
 
     fn ui_header(&mut self, ui: &mut egui::Ui) {
+        let accent = ui.visuals().hyperlink_color;
         ui.label(
             RichText::new("Silly Reminder")
                 .size(40.0)
                 .strong()
-                .color(Color32::KHAKI),
+                .color(accent),
         );
     }
 
     fn ui_settings(&mut self, ui: &mut egui::Ui) {
-        ui.label(RichText::new("Ustawienia").size(25.0).strong().color(Color32::KHAKI));
+        let accent = ui.visuals().hyperlink_color;
+        ui.label(RichText::new("Ustawienia").size(25.0).strong().color(accent));
         ui.group(|ui| {
             let response = ui.checkbox(&mut self.system_start, "Włącz podaczas włączania systemu");
 
@@ -99,54 +110,76 @@ impl SilliReminder {
     }
 
     fn ui_sections(&mut self, ui: &mut egui::Ui) {
-        ui.label(RichText::new("Dodaj").size(25.0).strong().color(Color32::KHAKI));
+        let accent = ui.visuals().hyperlink_color;
+        ui.label(RichText::new("Dodaj").size(25.0).strong().color(accent));
         ui.group(|ui| {
+            ui.set_min_width(ui.available_width());
+
+            let row_h = ui.spacing().interact_size.y;
+            let mut date_changed = false;
+            let mut note_changed = false;
+            let mut add_clicked = false;
+
             ui.horizontal(|ui| {
-                let response: egui::Response = ui.add(
+                let date_response: egui::Response = ui.add_sized(
+                    egui::vec2(120.0, row_h),
                     crate::widgets::DatePickerPlButton::new(&mut self.selected_date)
                         .id_salt("reminder_date")
                         .format("%Y-%m-%d"),
                 );
-                let note_response: egui::Response = ui.add(
-                    egui::TextEdit::singleline(&mut self.note_input)
-                    .id_salt("note_input")
-                    .hint_text("Notatka...")
-                );
+                date_changed = date_response.changed();
 
-                if ui.button("Dodaj").clicked() {
-                    if let Some(db) = &self.db {
-                        let note = self.note_input.trim();
-                        if note.is_empty() {
-                            eprintln!("note is empty; nothing inserted");
-                        } else {
-                            match db_operations::insert_reminder(&db.borrow(), self.selected_date, note) {
-                                Ok(id) => {
-                                    println!("Dodano #{id}: {}, {}", self.selected_date, note);
-                                    self.note_input.clear();
-                                }
-                                Err(err) => eprintln!("failed to insert reminder: {err}"),
-                            }
-                        }
-                    } else {
-                        eprintln!("database not available");
-                    }
-                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    add_clicked = ui
+                        .add_sized(egui::vec2(70.0, row_h), egui::Button::new("Dodaj"))
+                        .clicked();
 
-                if response.changed() {
-                    println!("Selected date -> {}", self.selected_date);
-                }
-
-                if note_response.changed() {
-                    println!("Note -> {}", self.note_input);
-                }
+                    let note_response: egui::Response = ui.add_sized(
+                        egui::vec2(ui.available_width(), row_h),
+                        egui::TextEdit::singleline(&mut self.note_input)
+                            .id_salt("note_input")
+                            .hint_text("Notatka..."),
+                    );
+                    note_changed = note_response.changed();
+                });
             });
+
+            if add_clicked {
+                if let Some(db) = &self.db {
+                    let note = self.note_input.trim();
+                    if note.is_empty() {
+                        eprintln!("note is empty; nothing inserted");
+                    } else {
+                        match db_operations::insert_reminder(&db.borrow(), self.selected_date, note) {
+                            Ok(id) => {
+                                println!("Dodano #{id}: {}, {}", self.selected_date, note);
+                                self.note_input.clear();
+                            }
+                            Err(err) => eprintln!("failed to insert reminder: {err}"),
+                        }
+                    }
+                } else {
+                    eprintln!("database not available");
+                }
+            }
+
+            if date_changed {
+                println!("Selected date -> {}", self.selected_date);
+            }
+
+            if note_changed {
+                println!("Note -> {}", self.note_input);
+            }
         });
     }
     
     fn ui_planed(&mut self, ui: &mut egui::Ui) {
-        ui.label(RichText::new("Zaplanowane").size(25.0).strong().color(Color32::KHAKI));
+        let accent = ui.visuals().hyperlink_color;
+        ui.label(RichText::new("Zaplanowane").size(28.0).strong().color(accent));
         ui.group(|ui| {
-            ui.vertical_centered(|ui| {
+            ui.set_min_size(ui.available_size());
+
+            ui.vertical(|ui| {
                 let Some(db) = &self.db else {
                     ui.label("Brak bazy danych");
                     return;
@@ -159,23 +192,56 @@ impl SilliReminder {
                         } else {
                             let mut delete_id: Option<i64> = None;
 
-                            for r in reminders.iter() {
-                                ui.push_id(r.id, |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.label(format!("{}  -  {}", r.date, r.note));
-                                        let remaining = ui.available_width();
-                                        ui.allocate_ui_with_layout(
-                                            egui::vec2(remaining, 0.0),
-                                            egui::Layout::right_to_left(egui::Align::Center),
-                                            |ui| {
-                                                if ui.button("X").clicked() {
-                                                    delete_id = Some(r.id);
-                                                }
-                                            },
-                                        );
-                                    });
+                            egui::ScrollArea::vertical()
+                                .max_height(ui.available_height())
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    for r in reminders.iter() {
+                                        ui.push_id(r.id, |ui| {
+                                            egui::Frame::NONE
+                                                .fill(ui.visuals().faint_bg_color)
+                                                .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                                                .corner_radius(egui::CornerRadius::same(6))
+                                                .inner_margin(egui::Margin::symmetric(8, 6))
+                                                .show(ui, |ui| {
+                                                    ui.horizontal(|ui| {
+                                                        let text_size = 18.0;
+                                                        let row_h = ui
+                                                            .spacing()
+                                                            .interact_size
+                                                            .y
+                                                            .max(text_size + 10.0);
+
+                                                        let row_text = RichText::new(format!(
+                                                            "{}  -  {}",
+                                                            r.date, r.note
+                                                        ))
+                                                        .size(text_size)
+                                                        .color(ui.visuals().text_color());
+                                                        ui.label(row_text);
+
+                                                        let remaining = ui.available_width();
+                                                        ui.allocate_ui_with_layout(
+                                                            egui::vec2(remaining, 0.0),
+                                                            egui::Layout::right_to_left(egui::Align::Center),
+                                                            |ui| {
+                                                                let danger = ui.visuals().error_fg_color;
+                                                                let x = egui::Button::new(
+                                                                    RichText::new("X")
+                                                                        .size(22.0)
+                                                                        .color(danger),
+                                                                );
+                                                                if ui.add_sized(egui::vec2(36.0, row_h), x).clicked() {
+                                                                    delete_id = Some(r.id);
+                                                                }
+                                                            },
+                                                        );
+                                                    });
+                                                });
+                                            ui.add_space(4.0);
+                                        });
+                                    }
                                 });
-                            }
 
                             if let Some(id) = delete_id {
                                 if let Err(err) = db_operations::delete_reminder(&db.borrow(), id) {

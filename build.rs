@@ -5,6 +5,7 @@ use std::path::PathBuf;
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let assets_dir = manifest_dir.join("assets");
+    println!("cargo:rerun-if-changed=build.rs");
 
     // --- Embed EXE icon on Windows (File Explorer icon, taskbar grouping icon, etc.)
     #[cfg(windows)]
