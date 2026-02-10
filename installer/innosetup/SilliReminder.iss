@@ -12,7 +12,7 @@
 #define MyExtraInstructionsUrl_en "https://github.com/Fanoks/SilliReminder/releases/download/v1.0.0/instruction.pdf"
 #define MyExtraInstructionsUrl_pl "https://github.com/Fanoks/SilliReminder/releases/download/v1.0.0/instrukcja.pdf"
 ; The file name that will be saved to Desktop
-#define MyExtraInstructionsFileName "SilliReminder - Instructions.md"
+#define MyExtraInstructionsFileName "SilliReminder - Instruction.pdf"
 ;   (Get-FileHash .\SilliReminder.exe -Algorithm SHA256).Hash
 #define MyAppSha256 "41d016cd199a849d82ecc79fee395d0af328b808a667549f04ffa121a04ce426"
 
