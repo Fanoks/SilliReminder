@@ -5,14 +5,22 @@
 ; Fill this with the direct download URL to your GitHub Release asset (.exe)
 #define MyAppUrl "https://github.com/Fanoks/SilliReminder/releases/download/v1.0.0/SilliReminder.exe"
 
-; Fill this with the expected SHA-256 of the downloaded EXE (64 hex chars)
-; Example: "0123AB..." (no spaces). You can compute it with PowerShell:
+; Optional: extra instructions file (downloaded to Desktop if the user checks the task)
+; Fill this with the direct download URL to your GitHub Release asset (e.g. .pdf)
+; If you have only one file for all languages, fill MyExtraInstructionsUrl and leave the language-specific URLs empty.
+#define MyExtraInstructionsUrl "https://github.com/Fanoks/SilliReminder/releases/download/v1.0.0/instruction.pdf"
+#define MyExtraInstructionsUrl_en "https://github.com/Fanoks/SilliReminder/releases/download/v1.0.0/instruction.pdf"
+#define MyExtraInstructionsUrl_pl "https://github.com/Fanoks/SilliReminder/releases/download/v1.0.0/instrukcja.pdf"
+; The file name that will be saved to Desktop
+#define MyExtraInstructionsFileName "SilliReminder - Instructions.md"
 ;   (Get-FileHash .\SilliReminder.exe -Algorithm SHA256).Hash
 #define MyAppSha256 "41d016cd199a849d82ecc79fee395d0af328b808a667549f04ffa121a04ce426"
 
 ; This installer uses the Inno Download Plugin (IDP) to download the EXE.
 ; Install IDP, then compile this script with Inno Setup.
-#include <idp.iss>
+#define _ScriptDir ExtractFilePath(__PATHFILENAME__)
+#pragma include __INCLUDE__ + ";" + _ScriptDir
+#include "idp\\idp.iss"
 
 [Setup]
 AppName={#MyAppName}
@@ -23,8 +31,8 @@ PrivilegesRequired=lowest
 OutputBaseFilename={#MyAppName}-Setup
 Compression=lzma2
 SolidCompression=yes
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
@@ -37,6 +45,9 @@ Name: "extrainstructions"; Description: "{cm:TaskExtraInstructions}"; GroupDescr
 [Icons]
 Name: "{autoprograms}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"
 Name: "{autodesktop}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; Tasks: desktopicon
+
+[Dirs]
+Name: "{app}"; Flags: uninsalwaysuninstall
 
 [Registry]
 ; The app can enable autostart by writing this value itself.
@@ -51,7 +62,7 @@ en.UninstallRemoveSettings=Remove settings (preferences)
 en.TaskIconsGroup=Additional icons:
 en.TaskDesktopIcon=Create a &desktop icon
 en.TaskDownloadsGroup=Additional downloads:
-en.TaskExtraInstructions=Download extra instructions
+en.TaskExtraInstructions=Download extra instructions to Desktop
 en.RunLaunchApp=Open {#MyAppName} after closing the wizard
 
 pl.UninstallDataGroup=Opcjonalne czyszczenie:
@@ -61,7 +72,7 @@ pl.UninstallRemoveSettings=Usuń ustawienia (preferencje)
 pl.TaskIconsGroup=Dodatkowe ikony:
 pl.TaskDesktopIcon=Utwórz ikonę na &pulpicie
 pl.TaskDownloadsGroup=Dodatkowe pobieranie:
-pl.TaskExtraInstructions=Pobierz dodatkową instrukcję
+pl.TaskExtraInstructions=Pobierz dodatkową instrukcję na Pulpit
 pl.RunLaunchApp=Otwórz {#MyAppName} po zamknięciu kreatora
 
 [UninstallDelete]
@@ -73,12 +84,13 @@ Filename: "{app}\\{#MyAppExeName}"; Description: "{cm:RunLaunchApp}"; Flags: now
 
 [Code]
 var
-  DownloadPage: TDownloadWizardPage;
   DownloadTarget: string;
+  ExtraInstructionsTarget: string;
+  UninstallRemoveDbSelected: Boolean;
+  UninstallRemoveSettingsSelected: Boolean;
 
-  UninstallCleanupGroup: TNewGroupBox;
-  UninstallRemoveDbCheck: TNewCheckBox;
-  UninstallRemoveSettingsCheck: TNewCheckBox;
+function GetLastError: Cardinal;
+  external 'GetLastError@kernel32.dll stdcall';
 
 function AppDataDir(): string;
 begin
@@ -93,6 +105,24 @@ end;
 function SettingsPath(): string;
 begin
   Result := AppDataDir() + '\\settings.sillisettings';
+end;
+
+function UninstallIsSilent: Boolean;
+var
+  I: Integer;
+  P: string;
+begin
+  for I := 1 to ParamCount do
+  begin
+    P := UpperCase(ParamStr(I));
+    if (P = '/SILENT') or (P = '/VERYSILENT') then
+    begin
+      Result := True;
+      exit;
+    end;
+  end;
+
+  Result := False;
 end;
 
 procedure BestEffortDeleteFile(const Path: string);
@@ -150,10 +180,10 @@ function GetFileSha256(const FileName: string): string;
 var
   ResultCode: Integer;
   OutFile: string;
-  OutText: string;
-  Lines: TArrayOfString;
-  I: Integer;
-  L: string;
+  OutText: AnsiString;
+  S: string;
+  P: Integer;
+  Token: string;
   Hash: string;
 begin
   Result := '';
@@ -177,11 +207,32 @@ begin
   if not LoadStringFromFile(OutFile, OutText) then
     exit;
 
-  Lines := SplitString(OutText, #13#10);
-  for I := 0 to GetArrayLength(Lines) - 1 do
+  S := string(OutText);
+  StringChangeEx(S, #13, ' ', True);
+  StringChangeEx(S, #10, ' ', True);
+  StringChangeEx(S, #9, ' ', True);
+
+  while Length(S) > 0 do
   begin
-    L := Trim(Lines[I]);
-    Hash := NormalizeHex(L);
+    while (Length(S) > 0) and (S[1] = ' ') do
+      Delete(S, 1, 1);
+
+    if Length(S) = 0 then
+      break;
+
+    P := Pos(' ', S);
+    if P = 0 then
+    begin
+      Token := S;
+      S := '';
+    end
+    else
+    begin
+      Token := Copy(S, 1, P - 1);
+      Delete(S, 1, P);
+    end;
+
+    Hash := NormalizeHex(Token);
     if IsHexLen(Hash, 64) then
     begin
       Result := Hash;
@@ -241,53 +292,102 @@ begin
   Result := (Copy(U, 1, 8) = 'https://');
 end;
 
+function SelectedExtraInstructionsUrl(): string;
+var
+  Lang: string;
+begin
+  Lang := Lowercase(Trim(ExpandConstant('{language}')));
+
+  if (Lang = 'pl') and ('{#MyExtraInstructionsUrl_pl}' <> '') then
+    Result := '{#MyExtraInstructionsUrl_pl}'
+  else if (Lang = 'en') and ('{#MyExtraInstructionsUrl_en}' <> '') then
+    Result := '{#MyExtraInstructionsUrl_en}'
+  else
+    Result := '{#MyExtraInstructionsUrl}';
+end;
+
+function ExtraInstructionsDesktopPath(): string;
+begin
+  Result := ExpandConstant('{userdesktop}\\{#MyExtraInstructionsFileName}');
+end;
+
 procedure InitializeWizard;
 begin
   DownloadTarget := ExpandConstant('{tmp}\\{#MyAppExeName}');
+  ExtraInstructionsTarget := ExpandConstant('{tmp}\\extra_instructions');
 
-  DownloadPage := CreateDownloadPage(
-    SetupMessage(msgWizardPreparing),
-    'Downloading {#MyAppName}...',
-    nil
-  );
-
-  DownloadPage.Add('{#MyAppUrl}', DownloadTarget, '');
+  idpDownloadAfter(wpReady);
 end;
 
 procedure InitializeUninstallProgressForm;
 var
-  LeftMargin: Integer;
-  TopPos: Integer;
-  WidthAvail: Integer;
+  Form: TSetupForm;
+  Info: TNewStaticText;
+  RemoveDb: TNewCheckBox;
+  RemoveSettings: TNewCheckBox;
+  OkBtn: TNewButton;
+  CancelBtn: TNewButton;
+  Res: Integer;
 begin
-  { Add optional cleanup checkboxes into the uninstall wizard UI }
-  LeftMargin := UninstallProgressForm.StatusLabel.Left;
-  WidthAvail := UninstallProgressForm.ProgressBar.Width;
-  TopPos := UninstallProgressForm.StatusLabel.Top + UninstallProgressForm.StatusLabel.Height + ScaleY(12);
+  UninstallRemoveDbSelected := False;
+  UninstallRemoveSettingsSelected := False;
 
-  UninstallCleanupGroup := TNewGroupBox.Create(UninstallProgressForm);
-  UninstallCleanupGroup.Parent := UninstallProgressForm.InnerNotebook;
-  UninstallCleanupGroup.Left := LeftMargin;
-  UninstallCleanupGroup.Top := TopPos;
-  UninstallCleanupGroup.Width := WidthAvail;
-  UninstallCleanupGroup.Height := ScaleY(72);
-  UninstallCleanupGroup.Caption := CustomMessage('UninstallDataGroup');
+  { Uninstall can finish very fast; collect choices before it starts }
+  if UninstallIsSilent then
+    exit;
 
-  UninstallRemoveDbCheck := TNewCheckBox.Create(UninstallProgressForm);
-  UninstallRemoveDbCheck.Parent := UninstallCleanupGroup;
-  UninstallRemoveDbCheck.Left := ScaleX(10);
-  UninstallRemoveDbCheck.Top := ScaleY(18);
-  UninstallRemoveDbCheck.Width := UninstallCleanupGroup.Width - ScaleX(16);
-  UninstallRemoveDbCheck.Caption := CustomMessage('UninstallRemoveDb');
-  UninstallRemoveDbCheck.Checked := False;
+  Form := CreateCustomForm(ScaleX(420), ScaleY(180), False, True);
+  Form.Caption := ExpandConstant('{#MyAppName}');
 
-  UninstallRemoveSettingsCheck := TNewCheckBox.Create(UninstallProgressForm);
-  UninstallRemoveSettingsCheck.Parent := UninstallCleanupGroup;
-  UninstallRemoveSettingsCheck.Left := ScaleX(10);
-  UninstallRemoveSettingsCheck.Top := UninstallRemoveDbCheck.Top + UninstallRemoveDbCheck.Height + ScaleY(6);
-  UninstallRemoveSettingsCheck.Width := UninstallCleanupGroup.Width - ScaleX(16);
-  UninstallRemoveSettingsCheck.Caption := CustomMessage('UninstallRemoveSettings');
-  UninstallRemoveSettingsCheck.Checked := False;
+  Info := TNewStaticText.Create(Form);
+  Info.Parent := Form;
+  Info.Left := ScaleX(12);
+  Info.Top := ScaleY(12);
+  Info.Width := Form.ClientWidth - ScaleX(24);
+  Info.Height := ScaleY(32);
+  Info.Caption := CustomMessage('UninstallDataGroup');
+  Info.Font.Style := [fsBold];
+
+  RemoveDb := TNewCheckBox.Create(Form);
+  RemoveDb.Parent := Form;
+  RemoveDb.Left := ScaleX(20);
+  RemoveDb.Top := Info.Top + Info.Height + ScaleY(8);
+  RemoveDb.Width := Form.ClientWidth - ScaleX(40);
+  RemoveDb.Caption := CustomMessage('UninstallRemoveDb');
+  RemoveDb.Checked := False;
+
+  RemoveSettings := TNewCheckBox.Create(Form);
+  RemoveSettings.Parent := Form;
+  RemoveSettings.Left := ScaleX(20);
+  RemoveSettings.Top := RemoveDb.Top + RemoveDb.Height + ScaleY(6);
+  RemoveSettings.Width := Form.ClientWidth - ScaleX(40);
+  RemoveSettings.Caption := CustomMessage('UninstallRemoveSettings');
+  RemoveSettings.Checked := False;
+
+  OkBtn := TNewButton.Create(Form);
+  OkBtn.Parent := Form;
+  OkBtn.Caption := SetupMessage(msgButtonOK);
+  OkBtn.ModalResult := mrOk;
+  OkBtn.Default := True;
+  OkBtn.Left := Form.ClientWidth - ScaleX(180);
+  OkBtn.Top := Form.ClientHeight - ScaleY(44);
+  OkBtn.Width := ScaleX(80);
+
+  CancelBtn := TNewButton.Create(Form);
+  CancelBtn.Parent := Form;
+  CancelBtn.Caption := SetupMessage(msgButtonCancel);
+  CancelBtn.ModalResult := mrCancel;
+  CancelBtn.Cancel := True;
+  CancelBtn.Left := Form.ClientWidth - ScaleX(92);
+  CancelBtn.Top := Form.ClientHeight - ScaleY(44);
+  CancelBtn.Width := ScaleX(80);
+
+  Res := Form.ShowModal;
+  if Res <> mrOk then
+    Abort;
+
+  UninstallRemoveDbSelected := RemoveDb.Checked;
+  UninstallRemoveSettingsSelected := RemoveSettings.Checked;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -317,20 +417,28 @@ begin
       exit;
     end;
 
-    DownloadPage.Show;
-    try
-      DownloadPage.Download;
-      if not VerifyDownloadedExe(DownloadTarget) then
+    { Build the download list right before the IDP download page }
+    idpClearFiles;
+    idpAddFile('{#MyAppUrl}', DownloadTarget);
+
+    if WizardIsTaskSelected('extrainstructions') then
+    begin
+      if SelectedExtraInstructionsUrl() = '<FILL_ME_GITHUB_DOWNLOAD_URL_TO_INSTRUCTIONS>' then
       begin
+        MsgBox('Installer is not configured. Set MyExtraInstructionsUrl (or MyExtraInstructionsUrl_en/pl) in the .iss file (or uncheck the extra instructions task).', mbError, MB_OK);
         Result := False;
         exit;
       end;
-      Result := True;
-    except
-      MsgBox('Download failed. Check your internet connection and URL.', mbError, MB_OK);
-      Result := False;
+
+      if not UrlLooksSecure(SelectedExtraInstructionsUrl()) then
+      begin
+        MsgBox('Unsafe extra instructions URL. Only https:// URLs are allowed.', mbError, MB_OK);
+        Result := False;
+        exit;
+      end;
+
+      idpAddFile(SelectedExtraInstructionsUrl(), ExtraInstructionsTarget);
     end;
-    DownloadPage.Hide;
   end;
 end;
 
@@ -338,9 +446,50 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssInstall then
   begin
-    if not FileCopy(DownloadTarget, ExpandConstant('{app}\\{#MyAppExeName}'), False) then
+    if not FileExists(DownloadTarget) then
     begin
-      MsgBox('Failed to install the application file.', mbError, MB_OK);
+      MsgBox('The application file was not downloaded. Installation cannot continue.', mbError, MB_OK);
+      Abort;
+    end;
+
+    if not VerifyDownloadedExe(DownloadTarget) then
+      Abort;
+
+    if not ForceDirectories(ExpandConstant('{app}')) then
+    begin
+      MsgBox('Failed to create the install directory:' + #13#10 + ExpandConstant('{app}'), mbError, MB_OK);
+      Abort;
+    end;
+
+    if not CopyFile(DownloadTarget, ExpandConstant('{app}\\{#MyAppExeName}'), False) then
+    begin
+      MsgBox(
+        'Failed to install the application file.' + #13#10 +
+        'From: ' + DownloadTarget + #13#10 +
+        'To:   ' + ExpandConstant('{app}\\{#MyAppExeName}') + #13#10 +
+        'Error: ' + IntToStr(GetLastError) + ' - ' + SysErrorMessage(GetLastError),
+        mbError,
+        MB_OK
+      );
+      Abort;
+    end;
+
+    if WizardIsTaskSelected('extrainstructions') then
+    begin
+      if not FileExists(ExtraInstructionsTarget) then
+      begin
+        MsgBox('Extra instructions were not downloaded. Installation will continue without them.', mbInformation, MB_OK);
+      end
+      else if not CopyFile(ExtraInstructionsTarget, ExtraInstructionsDesktopPath(), False) then
+      begin
+        MsgBox(
+          'Failed to save extra instructions to Desktop.' + #13#10 +
+          'To:   ' + ExtraInstructionsDesktopPath() + #13#10 +
+          'Error: ' + IntToStr(GetLastError) + ' - ' + SysErrorMessage(GetLastError),
+          mbInformation,
+          MB_OK
+        );
+      end;
     end;
   end;
 end;
@@ -349,13 +498,13 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
   begin
-    if Assigned(UninstallRemoveDbCheck) and UninstallRemoveDbCheck.Checked then
+    if UninstallRemoveDbSelected then
     begin
       BestEffortDeleteFile(DbPath());
       BestEffortRemoveDirIfEmpty(AppDataDir() + '\\data');
     end;
 
-    if Assigned(UninstallRemoveSettingsCheck) and UninstallRemoveSettingsCheck.Checked then
+    if UninstallRemoveSettingsSelected then
     begin
       BestEffortDeleteFile(SettingsPath());
     end;
